@@ -1,0 +1,122 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Distribution / packaging
+.Python
+build/
+dist/
+downloads/
+.eggs/
+*.egg-info/
+*.egg
+pip-wheel-metadata/
+
+# Virtual environments
+.venv
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Collected static files
+static/
+
+
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache/
+
+# Type checking
+.mypy_cache/
+.pyre/
+.pytype/
+
+# Linting
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Poetry
+poetry.lock
+
+# uv
+uv.lock
+
+# PDM
+.pdm-python/
+.pdm-build/
+
+# Hatch
+.hatch/
+
+# Coverage reports
+coverage.xml
+*.cover
+
+# Local settings
+local_settings.py
+
+# Secrets
+*.pem
+*.key
+*.crt
+
+# Docker overrides
+docker-compose.override.yml
+
+# Celery
+celerybeat-schedule
+
+# Sphinx
+docs/_build/
+
+# Temporary files
+tmp/
+temp/

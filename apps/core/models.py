@@ -29,3 +29,44 @@ class ShortURL(TimestampsMixin, SoftDeleteMixin, models.Model):
     max_clicks = models.IntegerField(
         null=True, blank=True
     )  # Users can set a limit amount of clicks before the link gets deactivated.
+
+
+class Click(TimestampsMixin, models.Model):
+    """
+    Track link clicks for analytics
+    """
+
+    DEVICE_CHOICES = [
+        ("desktop", "Desktop"),
+        ("mobile", "Mobile"),
+        ("tablet", "Tablet"),
+        ("bot", "Bot"),
+        ("unknown", "Unknown"),
+    ]
+
+    short_url = models.ForeignKey(
+        to=ShortURL, related_name="clicks", on_delete=models.DO_NOTHING
+    )
+
+    country_code = models.CharField(max_length=2, blank=True)
+    country_name = models.CharField(max_length=100, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+
+    device_type = models.CharField(
+        max_length=24, choices=DEVICE_CHOICES, default="unknown"
+    )
+    browser = models.CharField(max_length=64, blank=True)
+    os = models.CharField(max_length=64, blank=True)
+
+    referrer_domain = models.CharField(max_length=200, blank=True)
+
+    utm_source = models.CharField(max_length=100, blank=True)
+    utm_medium = models.CharField(max_length=100, blank=True)
+    utm_campaign = models.CharField(max_length=100, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["short_url", "created_at"]),
+            models.Index(fields=["created_at"]),
+        ]

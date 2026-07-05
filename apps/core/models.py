@@ -1,7 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.db import models
-from .mixins import TimestampsMixin, SoftDeleteMixin
+
 from apps.core.utils.slugs import generate_slug
+
+from .mixins import SoftDeleteMixin, TimestampsMixin
 
 _UserModel = get_user_model()
 

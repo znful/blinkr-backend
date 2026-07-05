@@ -21,7 +21,7 @@ class ShortURL(TimestampsMixin, SoftDeleteMixin, models.Model):
         default=generate_slug,
     )  # Users can leave it blank and let us generate it, or use a custom slug.
     owner = models.ForeignKey(
-        to=_UserModel, related_name="shortened_urls", on_delete=models.SET_NULL
+        to=_UserModel, related_name="shortened_urls", on_delete=models.CASCADE
     )
     expires_at = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(null=False, default=True)

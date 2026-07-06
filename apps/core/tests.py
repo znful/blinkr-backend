@@ -1,6 +1,10 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
 
 from apps.core.models import Click, ShortURL
 
@@ -173,3 +177,118 @@ class TestClickModel(TestCase):
         clicks = list(Click.objects.all())
         self.assertEqual(clicks[0].pk, click2.pk)
         self.assertEqual(clicks[1].pk, click1.pk)
+
+
+DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+MOBILE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+BOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+
+
+class TestRedirectView(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = _UserModel.objects.create(
+            email="test@example.com", password="testpass123"
+        )
+        self.short_url = ShortURL.objects.create(
+            original_url="https://example.com", owner=self.user
+        )
+
+    def test_valid_slug_redirects(self):
+        response = self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], "https://example.com")
+
+    def test_unknown_slug_returns_404(self):
+        response = self.client.get(reverse("redirect", args=["doesnotexist"]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_inactive_url_returns_410(self):
+        self.short_url.is_active = False
+        self.short_url.save()
+        response = self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.assertEqual(response.status_code, 410)
+
+    def test_expired_url_returns_410(self):
+        self.short_url.expires_at = timezone.now() - timedelta(hours=1)
+        self.short_url.save()
+        response = self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.assertEqual(response.status_code, 410)
+
+    def test_not_yet_expired_url_still_redirects(self):
+        self.short_url.expires_at = timezone.now() + timedelta(hours=1)
+        self.short_url.save()
+        response = self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.assertEqual(response.status_code, 302)
+
+    def test_max_clicks_reached_returns_410(self):
+        self.short_url.max_clicks = 1
+        self.short_url.save()
+        Click.objects.create(short_url=self.short_url)
+        response = self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.assertEqual(response.status_code, 410)
+
+    def test_max_clicks_reached_deactivates_url(self):
+        self.short_url.max_clicks = 1
+        self.short_url.save()
+        Click.objects.create(short_url=self.short_url)
+        self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.short_url.refresh_from_db()
+        self.assertFalse(self.short_url.is_active)
+
+    def test_below_max_clicks_still_redirects(self):
+        self.short_url.max_clicks = 5
+        self.short_url.save()
+        Click.objects.create(short_url=self.short_url)
+        response = self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.assertEqual(response.status_code, 302)
+
+    def test_redirect_records_click(self):
+        self.client.get(reverse("redirect", args=[self.short_url.slug]))
+        self.assertEqual(Click.objects.filter(short_url=self.short_url).count(), 1)
+
+    def test_redirect_records_utm_params(self):
+        self.client.get(
+            reverse("redirect", args=[self.short_url.slug]),
+            {
+                "utm_source": "newsletter",
+                "utm_medium": "email",
+                "utm_campaign": "launch",
+            },
+        )
+        click = Click.objects.get(short_url=self.short_url)
+        self.assertEqual(click.utm_source, "newsletter")
+        self.assertEqual(click.utm_medium, "email")
+        self.assertEqual(click.utm_campaign, "launch")
+
+    def test_redirect_records_referrer_domain(self):
+        self.client.get(
+            reverse("redirect", args=[self.short_url.slug]),
+            HTTP_REFERER="https://twitter.com/some/path",
+        )
+        click = Click.objects.get(short_url=self.short_url)
+        self.assertEqual(click.referrer_domain, "twitter.com")
+
+    def test_redirect_records_desktop_device_type(self):
+        self.client.get(
+            reverse("redirect", args=[self.short_url.slug]),
+            HTTP_USER_AGENT=DESKTOP_UA,
+        )
+        click = Click.objects.get(short_url=self.short_url)
+        self.assertEqual(click.device_type, "desktop")
+
+    def test_redirect_records_mobile_device_type(self):
+        self.client.get(
+            reverse("redirect", args=[self.short_url.slug]),
+            HTTP_USER_AGENT=MOBILE_UA,
+        )
+        click = Click.objects.get(short_url=self.short_url)
+        self.assertEqual(click.device_type, "mobile")
+
+    def test_redirect_records_bot_device_type(self):
+        self.client.get(
+            reverse("redirect", args=[self.short_url.slug]),
+            HTTP_USER_AGENT=BOT_UA,
+        )
+        click = Click.objects.get(short_url=self.short_url)
+        self.assertEqual(click.device_type, "bot")

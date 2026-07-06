@@ -29,7 +29,7 @@ class Migration(migrations.Migration):
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 ("deleted_at", models.DateTimeField(blank=True, null=True)),
-                ("original_url", models.URLField()),
+                ("original_url", models.URLField(max_length=2048)),
                 (
                     "slug",
                     models.CharField(
@@ -50,7 +50,7 @@ class Migration(migrations.Migration):
                 (
                     "owner",
                     models.ForeignKey(
-                        on_delete=django.db.models.deletion.DO_NOTHING,
+                        on_delete=django.db.models.deletion.CASCADE,
                         related_name="shortened_urls",
                         to=settings.AUTH_USER_MODEL,
                     ),

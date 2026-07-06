@@ -1,5 +1,3 @@
-from datetime import datetime
-from typing import override
 from django.db import models
 from django.utils import timezone
 
@@ -36,11 +34,12 @@ class SoftDeleteMixin(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     objects = SoftDeleteManager()
-    all_objects = models.Manager()  # Escape hatch to see everything
+    all_objects = models.Manager.from_queryset(SoftDeleteQuerySet)()
 
     def delete(self, *args, **kwargs):
         self.deleted_at = timezone.now()
         self.save(update_fields=["deleted_at"])
+        return 1, {self._meta.label: 1}
 
     def hard_delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)

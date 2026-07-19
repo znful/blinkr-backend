@@ -86,9 +86,6 @@ Desktop.ini
 # Poetry
 poetry.lock
 
-# uv
-uv.lock
-
 # PDM
 .pdm-python/
 .pdm-build/

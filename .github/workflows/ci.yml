@@ -24,3 +24,48 @@ jobs:
 
       - name: Run tests
         run: uv run manage.py test
+
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dev image
+        run: docker compose build web
+
+      - name: Write CI-only .env for the prod stack
+        run: |
+          cat > .env << 'EOF'
+          DJANGO_SECRET_KEY=ci-only-not-a-real-secret
+          DJANGO_DEBUG=false
+          DJANGO_ALLOWED_HOSTS=localhost
+          POSTGRES_DB=blinkr
+          POSTGRES_USER=blinkr
+          POSTGRES_PASSWORD=ci-only-password
+          EOF
+
+      - name: Build prod image and start the stack
+        run: docker compose -f docker-compose.prod.yml up -d --build
+
+      - name: Wait for web to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/admin/login/ > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "web never became ready" >&2
+          exit 1
+
+      - name: Run test suite inside the prod container (real Postgres)
+        run: docker compose -f docker-compose.prod.yml exec -T web uv run manage.py test
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v

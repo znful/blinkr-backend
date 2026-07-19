@@ -18,6 +18,7 @@ A URL shortener REST API built with Django and Django REST Framework.
 - Django 6 + Django REST Framework
 - PostgreSQL (SQLite for zero-config local dev)
 - Celery + Redis for async click recording
+- [djangorestframework-simplejwt](https://django-rest-framework-simplejwt.readthedocs.io/) for JWT auth
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - [user-agents](https://github.com/selwin/python-user-agents) for UA parsing
 
@@ -56,6 +57,42 @@ uv run manage.py runserver
 This uses SQLite and runs click recording eagerly only during tests — for real async recording you'll also need Redis running locally and a worker: `uv run celery -A blinkr worker -l info`.
 
 ## API
+
+### Auth
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/auth/register/` | Create an account |
+| `POST` | `/api/v1/auth/login/` | Exchange username + password for an access/refresh token pair |
+| `POST` | `/api/v1/auth/refresh/` | Exchange a refresh token for a new access token |
+| `POST` | `/api/v1/auth/logout/` | Blacklist a refresh token, invalidating it |
+
+**Register payload**
+
+```json
+{
+  "username": "jane",
+  "email": "jane@example.com",
+  "password": "correct-horse-battery-staple"
+}
+```
+
+Passwords are checked against Django's configured password validators.
+
+**Login payload**
+
+```json
+{
+  "username": "jane",
+  "password": "correct-horse-battery-staple"
+}
+```
+
+Returns `{"access": "...", "refresh": "..."}`. Access tokens live 15 minutes; refresh tokens live 7 days. Authenticate other requests with `Authorization: Bearer <access>`.
+
+`logout` requires a valid access token (`Authorization` header) and the refresh token to blacklist in the body: `{"refresh": "..."}`.
+
+---
 
 ### Redirect
 
@@ -104,13 +141,15 @@ uv run manage.py test
 apps/core/
   models.py        # ShortURL, Click
   mixins.py        # TimestampsMixin, SoftDeleteMixin
-  serializers.py   # ShortURLSerializer
+  serializers.py   # ShortURLSerializer, RegisterSerializer
   tasks.py         # record_click (Celery task)
   views/
     v1.py          # ShortURLViewSet (CRUD API)
     redirect.py    # redirect_view (public redirect + click recording)
+    auth.py        # RegisterView, LogoutView
   urls/
     v1.py          # API router
+    auth.py        # register/login/logout/refresh routes
   utils/
     slugs.py       # Auto slug generation
     user_agent.py  # UA parsing (device, browser, OS)

@@ -22,6 +22,14 @@ from apps.core.views.redirect import redirect_view
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/v1/", include([path("urls/", include("apps.core.urls.v1"))])),
+    path(
+        "api/v1/",
+        include(
+            [
+                path("urls/", include("apps.core.urls.v1")),
+                path("auth/", include("apps.core.urls.auth")),
+            ]
+        ),
+    ),
     path("<slug:slug>", redirect_view, name="redirect"),
 ]

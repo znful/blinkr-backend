@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -292,3 +293,126 @@ class TestRedirectView(TestCase):
         )
         click = Click.objects.get(short_url=self.short_url)
         self.assertEqual(click.device_type, "bot")
+
+
+class TestAuthEndpoints(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.password = "a-Very-Str0ng-Pass!"
+        self.user = _UserModel.objects.create_user(
+            username="alice", password=self.password
+        )
+
+    def _post(self, url_name, payload):
+        return self.client.post(
+            reverse(url_name),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+    def test_register_creates_user(self):
+        response = self._post(
+            "register",
+            {
+                "username": "bob",
+                "email": "bob@example.com",
+                "password": "an0ther-Str0ng-Pass!",
+            },
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(_UserModel.objects.filter(username="bob").exists())
+
+    def test_register_hashes_password(self):
+        self._post(
+            "register",
+            {
+                "username": "carol",
+                "email": "carol@example.com",
+                "password": "an0ther-Str0ng-Pass!",
+            },
+        )
+        user = _UserModel.objects.get(username="carol")
+        self.assertNotEqual(user.password, "an0ther-Str0ng-Pass!")
+        self.assertTrue(user.check_password("an0ther-Str0ng-Pass!"))
+
+    def test_register_rejects_weak_password(self):
+        response = self._post(
+            "register",
+            {"username": "dave", "email": "dave@example.com", "password": "password"},
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(_UserModel.objects.filter(username="dave").exists())
+
+    def test_register_rejects_duplicate_username(self):
+        response = self._post(
+            "register",
+            {
+                "username": "alice",
+                "email": "alice2@example.com",
+                "password": "an0ther-Str0ng-Pass!",
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_register_rejects_missing_email(self):
+        response = self._post(
+            "register", {"username": "erin", "password": "an0ther-Str0ng-Pass!"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(_UserModel.objects.filter(username="erin").exists())
+
+    def test_login_returns_tokens(self):
+        response = self._post(
+            "login", {"username": "alice", "password": self.password}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.json())
+        self.assertIn("refresh", response.json())
+
+    def test_login_rejects_wrong_password(self):
+        response = self._post("login", {"username": "alice", "password": "wrong"})
+        self.assertEqual(response.status_code, 401)
+
+    def test_access_token_authenticates_api_requests(self):
+        tokens = self._post(
+            "login", {"username": "alice", "password": self.password}
+        ).json()
+        response = self.client.get(
+            reverse("shorturl-list"), HTTP_AUTHORIZATION=f"Bearer {tokens['access']}"
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def test_api_requests_require_authentication(self):
+        response = self.client.get(reverse("shorturl-list"))
+        self.assertEqual(response.status_code, 401)
+
+    def test_refresh_returns_new_access_token(self):
+        tokens = self._post(
+            "login", {"username": "alice", "password": self.password}
+        ).json()
+        response = self._post("refresh", {"refresh": tokens["refresh"]})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("access", response.json())
+
+    def test_logout_blacklists_refresh_token(self):
+        tokens = self._post(
+            "login", {"username": "alice", "password": self.password}
+        ).json()
+        response = self.client.post(
+            reverse("logout"),
+            data=json.dumps({"refresh": tokens["refresh"]}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {tokens['access']}",
+        )
+        self.assertEqual(response.status_code, 204)
+
+        retry = self._post("refresh", {"refresh": tokens["refresh"]})
+        self.assertEqual(retry.status_code, 401)
+
+    def test_logout_requires_authentication(self):
+        response = self.client.post(
+            reverse("logout"),
+            data=json.dumps({"refresh": "irrelevant"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 401)

@@ -9,17 +9,38 @@ A URL shortener REST API built with Django and Django REST Framework.
 - Click tracking: device type, browser, OS, referrer domain, UTM parameters
 - Per-link controls: expiry date, max click limit, active/inactive toggle
 - Soft delete — links are never hard-removed by default
+- Async click recording via Celery
 - Password-protected links *(coming soon)*
-- Async click recording via Celery *(coming soon)*
 
 ## Stack
 
 - Python 3.13
 - Django 6 + Django REST Framework
+- PostgreSQL (SQLite for zero-config local dev)
+- Celery + Redis for async click recording
 - [uv](https://docs.astral.sh/uv/) for dependency management
 - [user-agents](https://github.com/selwin/python-user-agents) for UA parsing
 
 ## Getting started
+
+### With Docker (recommended — runs Postgres, Redis, the app, and the Celery worker together)
+
+**Prerequisites:** Docker, Docker Compose
+
+```bash
+git clone https://github.com/znful/blinkr-backend
+cd blinkr-backend
+
+docker compose up
+```
+
+The app is then available at `http://localhost:8000`. Source is bind-mounted, so edits are picked up without rebuilding. For a production-style run (baked-in code, gunicorn, non-root user), copy `.env.example` to `.env`, fill in real values, and run:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+### Without Docker
 
 **Prerequisites:** Python 3.13, [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
@@ -31,6 +52,8 @@ uv sync
 uv run manage.py migrate
 uv run manage.py runserver
 ```
+
+This uses SQLite and runs click recording eagerly only during tests — for real async recording you'll also need Redis running locally and a worker: `uv run celery -A blinkr worker -l info`.
 
 ## API
 
@@ -82,6 +105,7 @@ apps/core/
   models.py        # ShortURL, Click
   mixins.py        # TimestampsMixin, SoftDeleteMixin
   serializers.py   # ShortURLSerializer
+  tasks.py         # record_click (Celery task)
   views/
     v1.py          # ShortURLViewSet (CRUD API)
     redirect.py    # redirect_view (public redirect + click recording)
@@ -90,4 +114,10 @@ apps/core/
   utils/
     slugs.py       # Auto slug generation
     user_agent.py  # UA parsing (device, browser, OS)
+
+blinkr/
+  celery.py        # Celery app instance
+
+docker/
+  Dockerfile       # Multi-stage: dev (runserver, bind mount) / prod (gunicorn, non-root)
 ```

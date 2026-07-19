@@ -10,6 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
+import sys
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -117,3 +119,32 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+
+
+# Detects `manage.py test` so Celery can be switched to eager mode below —
+# no broker required to run the test suite.
+TESTING = "test" in sys.argv
+
+
+# Celery
+# https://docs.celeryq.dev/en/stable/userguide/configuration.html
+
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+
+# No CELERY_RESULT_BACKEND: click recording never reads a task's return value,
+# so there's nothing worth persisting a result for.
+
+# Force JSON everywhere instead of Celery's pickle default — pickle will
+# deserialize/execute arbitrary code, which is a real risk for anything that
+# reads from a broker.
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+
+CELERY_TIMEZONE = TIME_ZONE
+
+# Run tasks synchronously, in-process, during tests — no broker, no worker,
+# fully deterministic. EAGER_PROPAGATES makes a task's exceptions fail the
+# test instead of being swallowed.
+CELERY_TASK_ALWAYS_EAGER = TESTING
+CELERY_TASK_EAGER_PROPAGATES = TESTING
